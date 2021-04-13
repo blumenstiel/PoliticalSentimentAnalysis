@@ -1,0 +1,21 @@
+# run: conda update conda
+# run: conda update --all
+# run: conda env create --file environment.yml
+# run: source activate PSA
+name: PSA
+dependencies:
+  - python
+  - matplotlib
+  - jupyterlab
+  - scikit-learn
+  - scipy
+  - pathlib
+  - pandas
+  - requests
+  - python-dotenv
+  - qgrid
+  - seaborn
+  - pip
+  - nltk
+  - pip:
+    - -e .
