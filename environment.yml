@@ -17,5 +17,9 @@ dependencies:
   - seaborn
   - pip
   - nltk
+  - tweepy
+  - openpyxl
+  - textblob
+  - google-cloud-language
   - pip:
     - -e .

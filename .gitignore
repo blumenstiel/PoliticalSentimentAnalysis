@@ -149,3 +149,7 @@ dmypy.json
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
 .idea/**/dbnavigator.xml
+
+# Custom
+/src/twitterkey.py
+/src/google_api_credentials.json
