@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import re
-import string
+from nltk.stem import WordNetLemmatizer
 
 
 def preprocess_tweets(df: pd.DataFrame, column: str,
@@ -22,7 +22,6 @@ def preprocess_tweets(df: pd.DataFrame, column: str,
     :param df:
     :return:
     """
-    print(f'Preprocess {len(df)} tweets')
 
     # regex for hastags, mentions and urls
     hashtags = re.compile(r"^#\S+|\s#\S+")
@@ -36,6 +35,9 @@ def preprocess_tweets(df: pd.DataFrame, column: str,
         # extract hashtags and mentions
         df['hashtags'] = df[column].apply(hashtags.findall)
         df['mentions'] = df[column].apply(mentions.findall)
+        # remove white spaces and "#" and "@"
+        df.hashtags = df.hashtags.apply(lambda t: [h.strip()[1:] for h in t])
+        df.mentions = df.mentions.apply(lambda t: [m.strip()[1:] for m in t])
 
     def preprocess(text):
         text = hashtags.sub('', text)
@@ -62,6 +64,9 @@ def preprocess_tweets(df: pd.DataFrame, column: str,
 
         df.tokens = df.tokens.apply(lambda t: list(filter(filter_stopwords, t)))
 
+    lemmatizer = WordNetLemmatizer()
+    df.tokens = df.tokens.apply(lambda t: [lemmatizer.lemmatize(w) for w in t])
+
     if extract_information:
         df['length'] = df.tokens.apply(len)
 
@@ -70,7 +75,7 @@ def preprocess_tweets(df: pd.DataFrame, column: str,
 
 if __name__ == '__main__':
     # load data
-    tweets_df = pd.read_pickle('../../data/tweets_labeled.pkl')
+    tweets_df = pd.read_pickle('../../data/tweets_raw.pkl')
 
     # filter english tweets
     if 'language' in tweets_df.columns:

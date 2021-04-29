@@ -23,50 +23,61 @@ def text_emotion(df, column, path_to_root='', lexicon='emotion_lexicon'):
     '''
 
     filepath = path_to_root
-    if lexicon == 'emotion_intensity_lexicon':
-        filepath += emotion_intensity_lexicon_path
-    elif lexicon == 'emotion_lexicon':
+    if lexicon == 'emotion_lexicon':
         filepath += emotion_lexicon_path
+    elif lexicon == 'emotion_intensity_lexicon':
+        # note: emotion_lexicon contains around 3 times more words than emotion_intensity_lexicon
+        filepath += emotion_intensity_lexicon_path
     else:
         filepath += lexicon
 
     # get emotion intensity scores from lexicon
     emolex_df = pd.read_csv(filepath,
-                            names=["word", "emotion", "intensity"],
+                            names=["word", "emotion", "score"],
                             sep='\t', header=0)
 
     # create pivot table
     emolex_words = emolex_df.pivot(index='word',
                                    columns='emotion',
-                                   values='intensity').reset_index()
+                                   values='score').reset_index()
     emolex_words.fillna(0, inplace=True)
+    # adding neutral for words not labeled with emotions
     emolex_words['neutral'] = 0
+
+    # drop word == 0, looks like an error in pivot() as 0 is not in emolex_df
+    emolex_words = emolex_words[emolex_words.word != 0]
 
     # get list of emotions
     emotions = emolex_words.columns.drop('word')
 
     # create tweet-emotion-matrix
-    emo_df = pd.DataFrame(0, index=df.index, columns=emotions)
+    emo_df = pd.DataFrame(0., index=df.index, columns=emotions)
 
-    tokenizer = TweetTokenizer()
+    # tokenize tweets if str is provided
+    if type(df[column].iloc[0]) == str:
+        tokenizer = TweetTokenizer()
+        df[column] = df[column].apply(str.lower)
+        df[column] = df[column].apply(tokenizer.tokenize)
+
     stemmer = SnowballStemmer("english")
+    emolex_words['stem'] = emolex_words.word.apply(stemmer.stem)
 
-    with tqdm(total=len(list(df.iterrows()))) as pbar:
-        for i, row in df.iterrows():
-            pbar.update(1)
-            # text = word_tokenize(df.loc[i][column])
-            # text = tokenizer.tokenize(df.loc[i][column])
-            text = casual_tokenize(df.loc[i][column])
+    for i, row in df.iterrows():
+        text = df.loc[i][column]
+        for word in text:
+            stem = stemmer.stem(word)
 
-            for word in text:
-                word = stemmer.stem(word.lower())
-                if len(word) < 2:
-                    continue
-
-                emo_score = emolex_words[emolex_words.word == word]
-                if not emo_score.empty:
-                    emo_df.loc[i] = emo_df.loc[i] + emo_score[emotions].values[0]
-                #else:
-                #    emo_df.at[i, 'neutral'] += 1
+            # get matches with stem
+            emo_score = emolex_words[emolex_words.stem == stem]
+            if not emo_score.empty:
+                # in case of multiple matches with word stem
+                if word in emo_score.word.values:
+                    # match with exact word
+                    emo_df.loc[i] = emo_df.loc[i] + emo_score[emo_score.word == word][emotions].values[0]
+                else:
+                    # mean of all stem matches
+                    emo_df.loc[i] = emo_df.loc[i] + emo_score[emotions].mean().values
+            else:
+                emo_df.at[i, 'neutral'] += 1.
 
     return emo_df
