@@ -1,102 +1,328 @@
-
-# https://curiousily.com/posts/sentiment-analysis-with-bert-and-hugging-face-using-pytorch-and-python/
-# https://www.tensorflow.org/tutorials/text/classify_text_with_bert
-# https://towardsdatascience.com/sentiment-analysis-in-10-minutes-with-bert-and-hugging-face-294e8a04b671
-# https://github.com/OthSay/bert-tweets-analysis
-# https://github.com/akoksal/BERT-Sentiment-Analysis-Turkish/blob/master/BERT%20Features%20with%20Keras.ipynb
-
-# -> https://www.kaggle.com/menion/sentiment-analysis-with-bert-87-accuracya
+# code based on
+# https://iq.opengenus.org/binary-text-classification-bert/
+# https://colab.research.google.com/drive/1Wd8pQDaSwLgyHsHF9UjN7-fP93cfPOFI?usp=sharing
 
 import os
 import shutil
 import numpy as np
 import pandas as pd
-from BertLibrary import BertFTModel
 import re
+import torch
+import random
+import time
+import datetime
+
+from transformers import BertTokenizer, BertForSequenceClassification, AdamW, BertConfig, \
+    get_linear_schedule_with_warmup
+from keras.preprocessing.sequence import pad_sequences
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 
 _root_path = '../../'
 
-# LOAD DATA
-t140 = pd.read_csv(_root_path + 'data/sentiment140/training.1600000.processed.noemoticon.csv',
-                   sep=',',
-                   header=None,
-                   encoding='latin')
 
-label_text = t140[[0, 5]]
+class BertDataset(object):
+    """
+    Class for Training and Validation Set
+    """
+    def __init__(self, sentences, labels, batch_size=32, max_len=160):
 
-# Convert labels to range -1 to 1
-label_text[0] = label_text[0].apply(lambda x: -1 if x == 0 else 1)
+        # low level BERT
+        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 
-# Assign proper column names to labels
-label_text.columns = ['label', 'text']
+        def encode_sent(sent):
+            # Encode sentence and adding special tokens '[CLS]' and '[SEP]'
+            return tokenizer.encode(sent, add_special_tokens=True)
 
-# Assign proper column names to labels
-# label_text.head()
+        inputs = list(map(encode_sent, sentences))
 
-# PREPROCESSING
+        print('Max sentence length:', max([len(sen) for sen in inputs]))
+        print('Pad sentences to length:', max_len)
 
+        inputs = pad_sequences(inputs, maxlen=max_len, truncating="post", padding="post")
 
-# regex for hastags, mentions and urls
-hashtags = re.compile(r"^#\S+|\s#\S+")
-mentions = re.compile(r"^@\S+|\s@\S+")
-urls = re.compile(r"https?://\S+")
-whitespaces = re.compile(r"\s\s+")
-non_characters = re.compile(r"[^A-Za-z\s]+")
-short_words = re.compile(r"^\S\S?\s|\s\S\S?\s|\s\S\S?$")
+        attention_masks = list(map(lambda s: [int(token_id > 0) for token_id in s], inputs))
 
+        # changing the numpy arrays into tensors
+        inputs = torch.tensor(inputs)
+        labels = torch.tensor(labels)
+        masks = torch.tensor(attention_masks)
 
-def preprocess(text):
-    text = hashtags.sub('', text)
-    text = mentions.sub('', text)
-    text = urls.sub('', text)
-    # remove all punctuation, numbers, emojis etc.
-    text = non_characters.sub('', text)
-    # double white spaces, spaces on beginning or ending and lower case
-    text = whitespaces.sub(' ', text).strip().lower()
-    return text
+        self.batch_size = 32
+
+        # DataLoader
+        self.data = TensorDataset(inputs, masks, labels)
+        self.sampler = RandomSampler(self.data)
+        self.dataloader = DataLoader(self.data, sampler=self.sampler, batch_size=batch_size)
 
 
-label_text.text = label_text.text.apply(preprocess)
+class BertClassifier(object):
+    def __init__(self, model='bert-base-uncased', num_classes=2, max_len=160):
 
-# TRAIN TEST SPLIT
-
-from sklearn.model_selection import train_test_split
-
-TRAIN_SIZE = 0.75
-VAL_SIZE = 0.05
-dataset_count = len(label_text)
-
-df_train_val, df_test = train_test_split(label_text, test_size=1 - TRAIN_SIZE - VAL_SIZE, random_state=42)
-df_train, df_val = train_test_split(df_train_val, test_size=VAL_SIZE / (VAL_SIZE + TRAIN_SIZE), random_state=42)
-
-print("TRAIN size:", len(df_train))
-print("VAL size:", len(df_val))
-print("TEST size:", len(df_test))
-
-dataset_path = _root_path + 'data/sentiment140/dataset'
-os.mkdir(dataset_path)
-df_train.sample(frac=1.0).reset_index(drop=True).to_csv(dataset_path + '/train.tsv', sep='\t', index=None, header=None)
-df_val.to_csv(dataset_path + '/dev.tsv', sep='\t', index=None, header=None)
-df_test.to_csv(dataset_path + '/test.tsv', sep='\t', index=None, header=None)
+        # init model
+        if os.path.isfile(model):
+            # load from file
+            self.model = BertForSequenceClassification.from_pretrained(model)
+        else:
+            # download pretrained
+            self.model = BertForSequenceClassification.from_pretrained(
+                model,
+                num_labels=num_classes,
+                output_attentions=False,
+                output_hidden_states=False,
+            )
 
 
-os.system('wget https://storage.googleapis.com/bert_models/2018_10_18/uncased_L-12_H-768_A-12.zip')
-os.system('unzip uncased_L-12_H-768_A-12.zip')
 
-ft_model = BertFTModel(model_dir='uncased_L-12_H-768_A-12',
-                       ckpt_name="bert_model.ckpt",
-                       labels=['-1', '1'],
-                       lr=1e-05,
-                       num_train_steps=30000,
-                       num_warmup_steps=1000,
-                       ckpt_output_dir='output',
-                       save_check_steps=1000,
-                       do_lower_case=False,
-                       max_seq_len=50,
-                       batch_size=32,
-                       )
+        # init tokenizer
+        self.tokenizer = BertTokenizer.from_pretrained(model, do_lower_case=True)
+        self.max_len = max_len
 
-ft_trainer =  ft_model.get_trainer()
-ft_evaluator = ft_model.get_evaluator()
-ft_trainer.train_from_file(dataset_path, 35000)
-ft_evaluator.evaluate_from_file(dataset_path, checkpoint="output/model.ckpt-35000")
+    def summary(self):
+        # Get all of the model's parameters as a list of tuples.
+        params = list(self.model.named_parameters())
+        print('The BERT model has {:} different named parameters.\n'.format(len(params)))
+        print('==== Embedding Layer ====\n')
+        for p in params[0:5]:
+            print("{:<55} {:>12}".format(p[0], str(tuple(p[1].size()))))
+        print('\n==== First Transformer ====\n')
+        for p in params[5:21]:
+            print("{:<55} {:>12}".format(p[0], str(tuple(p[1].size()))))
+        print('\n==== Output Layer ====\n')
+        for p in params[-4:]:
+            print("{:<55} {:>12}".format(p[0], str(tuple(p[1].size()))))
+
+    def do_train(self, epochs, train_dataloader, validation_dataloader=None, optimizer=None, save_path=None):
+        """
+        Method for training BertClassifier
+        """
+        # init optimizer
+        if optimizer is not None:
+            self.optimizer = optimizer
+        else:
+            self.optimizer = AdamW(self.model.parameters(), lr=2e-5, eps=1e-8)
+
+        # select device (CPU or GPU)
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+            print('Using GPU:', torch.cuda.get_device_name(0))
+        else:
+            print('No GPU available, using the CPU instead.')
+            self.device = torch.device("cpu")
+        self.model.to(self.device)
+
+        total_steps = len(train_dataloader) * epochs
+        global_step = 0
+
+        scheduler = get_linear_schedule_with_warmup(self.optimizer,
+                                                    num_warmup_steps=0,  # Default value in run_glue.py
+                                                    num_training_steps=total_steps)
+
+        # This training code is based on the `run_glue.py` script here:
+        # https://github.com/huggingface/transformers/blob/5bfcd0485ece086ebcbed2d008813037968a9e58/examples/run_glue.py#L128
+
+        # Set the seed value all over the place to make this reproducible.
+        set_seed(42)
+        # Store the average loss after each epoch so we can plot them.
+        loss_values = []
+
+        for epoch_i in range(epochs):
+            # Perform one full pass over the training set.
+            print("")
+            print('======== Epoch {:} / {:} ========'.format(epoch_i + 1, epochs))
+
+            # Measure how long the training epoch takes.
+            t0 = time.time()
+
+            # Reset the total loss for this epoch.
+            total_loss = 0
+
+            # Put the model into training mode
+            self.model.train()
+
+            # For each batch of training data...
+            for step, batch in enumerate(train_dataloader):
+
+                # Add batch to GPU
+                batch = tuple(t.to(self.device) for t in batch)
+
+                # Unpack the inputs from our dataloader
+                b_input_ids, b_input_mask, b_labels = batch
+
+                #  clear previously calculated gradients before performing a backward pass
+                self.model.zero_grad()
+
+                # Perform a forward pass
+                outputs = self.model(b_input_ids,
+                                     attention_mask=b_input_mask,
+                                     token_type_ids=None,
+                                     labels=b_labels)
+                loss = outputs[0]
+
+                # Accumulate the training loss over all of the batches
+                total_loss += loss.item()
+
+                # Perform a backward pass to calculate the gradients.
+                loss.backward()
+
+                # Clip the norm of the gradients to 1.0.
+                # This is to help prevent the "exploding gradients" problem.
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+
+                # Update parameters and take a step using the computed gradient.
+                self.optimizer.step()
+
+                # Update the learning rate.
+                scheduler.step()
+
+                global_step += 1
+                # Progress update every 100 batches.
+                if step % 100 == 0 and not step == 0:
+                    # Report progress.
+                    print(f'Batch: {step:>5,} / {len(train_dataloader):>5,} - '
+                          f'Current Loss: {loss.item()} - '
+                          f'Elapsed: {format_time(time.time() - t0)} - '
+                          f'ETA: {format_time((time.time() - t0) / global_step * (total_steps - step))}')
+
+            # Calculate the average loss over the training data.
+            avg_train_loss = total_loss / len(train_dataloader)
+
+            # Store the loss value for plotting the learning curve.
+            loss_values.append(avg_train_loss)
+
+            print("")
+            print(f"Average training loss: {avg_train_loss:.2f}")
+            print(f"Training epoch took: {format_time(time.time() - t0)}")
+
+            if save_path is not None:
+                os.makedirs(save_path)
+                self.model.save_pretrained(f'{save_path}model_{global_step}.pth')
+
+            if validation_dataloader is not None:
+                self.do_evaluation(validation_dataloader)
+
+        print("")
+        print("Training complete!")
+
+    def do_evaluation(self, validation_dataloader):
+        print("")
+        print("Running Validation")
+
+        t0 = time.time()
+
+        # Put the model in evaluation mode
+        self.model.eval()
+
+        # Tracking variables
+        eval_loss, eval_accuracy = 0, 0
+        nb_eval_steps, nb_eval_examples = 0, 0
+
+        # Evaluate data for one epoch
+        for batch in validation_dataloader:
+            # Add batch to GPU
+            batch = tuple(t.to(self.device) for t in batch)
+
+            # Unpack the inputs from our dataloader
+            b_input_ids, b_input_mask, b_labels = batch
+
+            # Telling the model not to compute or store gradients, saving memory and
+            # speeding up validation
+            with torch.no_grad():
+                # Forward pass, calculate logit predictions.
+                outputs = self.model(b_input_ids,
+                                     token_type_ids=None,
+                                     attention_mask=b_input_mask)
+            logits = outputs[0]
+
+            # Move logits and labels to CPU
+            logits = logits.detach().cpu().numpy()
+            label_ids = b_labels.to('cpu').numpy()
+
+            # Calculate the accuracy for this batch of test sentences.
+            tmp_eval_accuracy = flat_accuracy(logits, label_ids)
+
+            # Accumulate the total accuracy.
+            eval_accuracy += tmp_eval_accuracy
+
+            # Track the number of batches
+            nb_eval_steps += 1
+
+        # Report the final accuracy for this validation run.
+        print(f"Accuracy: {eval_accuracy / nb_eval_steps:.2f}")
+        print(f"Validation took: {format_time(time.time() - t0)}")
+
+    def predict(self, sentence):
+        if type(sentence) != str:
+            return self.predict_batch(sentence)
+
+        input = self.tokenizer.encode(sentence,add_special_tokens = True)
+        input = pad_sequences(input, maxlen=self.max_len , truncating="post", padding="post")
+        mask = [int(token_id > 0) for token_id in input]
+        output = self.model([input],
+                   token_type_ids=None,
+                   attention_mask=[mask])[0]
+
+        return output
+
+    def predict_batch(self, sentences):
+        inputs = list(map(lambda s: self.tokenizer.encode(s, add_special_tokens=True), sentences))
+        inputs = list(map(lambda s: pad_sequences(s, maxlen=self.max_len, truncating="post", padding="post"), inputs))
+        masks = list(map(lambda s: [int(token_id > 0) for token_id in s], inputs))
+
+        output = self.model(inputs,
+                            token_type_ids=None,
+                            attention_mask=masks)
+
+        return output
+
+    def save(self, path):
+        self.model.save_pretrained(path)
+
+    def load(self, path):
+        self.__init__(path)
+
+
+def flat_accuracy(preds, labels):
+    """
+    Function to calculate the accuracy of our predictions vs labels
+    """
+    pred_flat = np.argmax(preds, axis=1).flatten()
+    labels_flat = labels.flatten()
+    return np.sum(pred_flat == labels_flat) / len(labels_flat)
+
+
+def format_time(elapsed):
+    """
+    Takes a time in seconds and returns a string hh:mm:ss
+    """
+    # Round to the nearest second.
+    elapsed_rounded = int(round((elapsed)))
+
+    # Format as hh:mm:ss
+    return str(datetime.timedelta(seconds=elapsed_rounded))
+
+
+def set_seed(seed):
+    """
+    Set a seed to be reproducible
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def sample_dataset(df, column, num_samples):
+    """
+    Get sampled dataset
+    """
+    # init
+    samples = pd.DataFrame()
+    num_labels = len(df[column].unique())
+
+    # get samples for each label in column of df
+    for label in df[column].unique():
+        label_df = df[df[column] == label]
+        label_df = label_df.loc[random.choices(label_df.index, k=max(int(num_samples / num_labels), len(label_df)))]
+        samples = pd.concat([samples, label_df])
+
+    return samples
