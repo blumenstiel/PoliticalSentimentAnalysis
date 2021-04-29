@@ -62,6 +62,9 @@ class BertClassifier(object):
         if os.path.isfile(model):
             # load from file
             self.model = BertForSequenceClassification.from_pretrained(model)
+            # TODO: Save tokenizer!
+            self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+            self.max_len = max_len
         else:
             # download pretrained
             self.model = BertForSequenceClassification.from_pretrained(
@@ -73,9 +76,9 @@ class BertClassifier(object):
 
 
 
-        # init tokenizer
-        self.tokenizer = BertTokenizer.from_pretrained(model, do_lower_case=True)
-        self.max_len = max_len
+            # init tokenizer
+            self.tokenizer = BertTokenizer.from_pretrained(model, do_lower_case=True)
+            self.max_len = max_len
 
     def summary(self):
         # Get all of the model's parameters as a list of tuples.
@@ -91,7 +94,7 @@ class BertClassifier(object):
         for p in params[-4:]:
             print("{:<55} {:>12}".format(p[0], str(tuple(p[1].size()))))
 
-    def do_train(self, epochs, train_dataloader, validation_dataloader=None, optimizer=None, save_path=None):
+    def do_train(self, train_dataloader, validation_dataloader=None, epochs=1, optimizer=None, save_path=None):
         """
         Method for training BertClassifier
         """
@@ -179,7 +182,7 @@ class BertClassifier(object):
                 if step % 100 == 0 and not step == 0:
                     # Report progress.
                     print(f'Batch: {step:>5,} / {len(train_dataloader):>5,} - '
-                          f'Current Loss: {loss.item()} - '
+                          f'Current Loss: {round(loss.item(), 4)} - '
                           f'Elapsed: {format_time(time.time() - t0)} - '
                           f'ETA: {format_time((time.time() - t0) / global_step * (total_steps - step))}')
 
@@ -195,7 +198,8 @@ class BertClassifier(object):
 
             if save_path is not None:
                 os.makedirs(save_path)
-                self.model.save_pretrained(f'{save_path}model_{global_step}.pth')
+                self.model.save_pretrained(f'{save_path}model_{global_step}')
+                self.tokenizer.save_pretrained(f'{save_path}model_{global_step}')
 
             if validation_dataloader is not None:
                 self.do_evaluation(validation_dataloader)
@@ -250,27 +254,25 @@ class BertClassifier(object):
         print(f"Accuracy: {eval_accuracy / nb_eval_steps:.2f}")
         print(f"Validation took: {format_time(time.time() - t0)}")
 
-    def predict(self, sentence):
-        if type(sentence) != str:
-            return self.predict_batch(sentence)
+    def predict(self, input):
+        if type(input) == str:
+            input = list(input)
 
-        input = self.tokenizer.encode(sentence,add_special_tokens = True)
-        input = pad_sequences(input, maxlen=self.max_len , truncating="post", padding="post")
-        mask = [int(token_id > 0) for token_id in input]
-        output = self.model([input],
-                   token_type_ids=None,
-                   attention_mask=[mask])[0]
-
-        return output
-
-    def predict_batch(self, sentences):
-        inputs = list(map(lambda s: self.tokenizer.encode(s, add_special_tokens=True), sentences))
-        inputs = list(map(lambda s: pad_sequences(s, maxlen=self.max_len, truncating="post", padding="post"), inputs))
+        inputs = list(map(lambda s: self.tokenizer.encode(s, add_special_tokens=True), input))
+        inputs = pad_sequences(inputs, maxlen=self.max_len, truncating="post", padding="post")
         masks = list(map(lambda s: [int(token_id > 0) for token_id in s], inputs))
 
+        inputs = torch.tensor(inputs)
+        masks = torch.tensor(masks)
+
         output = self.model(inputs,
-                            token_type_ids=None,
-                            attention_mask=masks)
+                   token_type_ids=None,
+                   attention_mask=masks)
+
+        output = torch.nn.Softmax()(output[0]).detach().numpy()
+
+        if len(output) == 1:
+            return output[0]
 
         return output
 
@@ -322,7 +324,7 @@ def sample_dataset(df, column, num_samples):
     # get samples for each label in column of df
     for label in df[column].unique():
         label_df = df[df[column] == label]
-        label_df = label_df.loc[random.choices(label_df.index, k=max(int(num_samples / num_labels), len(label_df)))]
+        label_df = label_df.loc[random.choices(label_df.index, k=min(int(num_samples / num_labels), len(label_df)))]
         samples = pd.concat([samples, label_df])
 
     return samples
