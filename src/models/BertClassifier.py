@@ -25,7 +25,7 @@ class BertDataset(object):
     Class for Training and Validation Set
     """
 
-    def __init__(self, sentences, labels, batch_size=32, max_len=160):
+    def __init__(self, sentences, labels, batch_size=32, max_len=200):
         # low level BERT
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 
@@ -130,9 +130,6 @@ class BertClassifier(object):
             # Measure how long the training epoch takes.
             t0 = time.time()
 
-            # Reset the total loss for this epoch.
-            total_loss = 0
-
             # Put the model into training mode
             self.model.train()
 
@@ -155,8 +152,8 @@ class BertClassifier(object):
                                      labels=b_labels)
                 loss = outputs[0]
 
-                # Accumulate the training loss over all of the batches
-                total_loss += loss.item()
+                # Save training loss
+                loss_values.append(loss.item())
 
                 # Perform a backward pass to calculate the gradients.
                 loss.backward()
@@ -176,15 +173,12 @@ class BertClassifier(object):
                 if step % 100 == 0 and not step == 0:
                     # Report progress.
                     print(f'Batch: {step:>5,} / {len(train_dataloader):>5,} - '
-                          f'Current Loss: {loss.item()} - '
+                          f'Moving Average Loss: {round(sum(loss_values[-100:])/100, 4)} - '
                           f'Elapsed: {format_time(time.time() - t0)} - '
                           f'ETA: {format_time((time.time() - t0) / global_step * (total_steps - step))}')
 
             # Calculate the average loss over the training data.
-            avg_train_loss = total_loss / len(train_dataloader)
-
-            # Store the loss value for plotting the learning curve.
-            loss_values.append(avg_train_loss)
+            avg_train_loss = sum(loss_values) / len(train_dataloader)
 
             print("")
             print(f"Average training loss: {avg_train_loss:.2f}")
