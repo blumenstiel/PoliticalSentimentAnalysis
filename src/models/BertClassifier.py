@@ -25,7 +25,7 @@ class BertDataset(object):
     Class for Training and Validation Set
     """
 
-    def __init__(self, sentences, labels, batch_size=32, max_len=200):
+    def __init__(self, sentences, labels, batch_size=50, max_len=200):
         # low level BERT
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 
@@ -47,8 +47,6 @@ class BertDataset(object):
         labels = torch.tensor(labels)
         masks = torch.tensor(attention_masks)
 
-        self.batch_size = 32
-
         # DataLoader
         self.data = TensorDataset(inputs, masks, labels)
         self.sampler = RandomSampler(self.data)
@@ -56,7 +54,7 @@ class BertDataset(object):
 
 
 class BertClassifier(object):
-    def __init__(self, model='bert-base-uncased', num_classes=2, max_len=160):
+    def __init__(self, model='bert-base-uncased', num_classes=2, max_len=200):
 
         # init model
         if os.path.isfile(model):

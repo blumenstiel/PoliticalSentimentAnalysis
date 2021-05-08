@@ -74,16 +74,17 @@ def google_sentiment_analysis(text):
 
 
 # iterate over test df and sleep all 600 request because of Google API rate limits
+test_df['google'] = None
 for i, row in test_df.iterrows():
     test_df.at[i, 'google'] = google_sentiment_analysis(row.text)
 
-    if i != 0 and i % 600 == 0:
+    if i != 0 and i % 500 == 0:
       time.sleep(60)
 
 print('Finished Google API')
 
 # BERT
-bert_path = _root_path + '/models/bert/model_44720'
+bert_path = _root_path + '/models/bert/model_28620'
 
 assert os.path.isdir(bert_path), f'Please train Bert Classifier (given dir: {bert_path})'
 

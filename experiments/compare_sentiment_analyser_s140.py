@@ -14,6 +14,7 @@ from google.cloud import language_v1
 from src.models.BertClassifier import BertClassifier, BertDataset
 from src.utils import sample_dataset
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, accuracy_score, f1_score
 
 _root_path = '/content/drive/MyDrive/PoliticalSentimentAnalysis/'
 
@@ -80,16 +81,17 @@ def google_sentiment_analysis(text):
 
 
 # iterate over test df and sleep all 600 request because of Google API rate limits
+test_df['google'] = None
 for i, row in test_df.iterrows():
     test_df.at[i, 'google'] = google_sentiment_analysis(row.text)
 
-    if i != 0 and i % 600 == 0:
+    if i != 0 and i % 500 == 0:
       time.sleep(60)
 
 print('Finished Google API')
 
 # BERT
-bert_path = _root_path + '/models/bert/model_44720'
+bert_path = _root_path + '/models/bert/model_28620'
 
 if not os.path.isdir(bert_path):
     train_df = label_text.drop(test_df.index)
@@ -116,8 +118,10 @@ test_df['bert_score'] = test_df['bert'].apply(lambda x: x['pos'] - x['neg'])
 test_df['testblob_pattern_score'] = test_df['testblob_pattern'].apply(lambda x: x['polarity'])
 test_df['testblob_nb_score'] = test_df['testblob_nb'].apply(lambda x: x['p_pos'] - x['p_neg'])
 test_df['emolex_score'] = test_df['emolex'].apply(lambda x: x['positive'] - x['negative'])
-# normalize emolex_score with length to match format [-1, 1]
+# normalize emolex_score with length of tweet
 test_df['emolex_score'] = test_df['emolex_score'] / test_df.text.apply(lambda t: len(t.split(' ')))
+# resize range to [-1, 1]
+test_df['emolex_score'] = test_df['emolex_score'] / (max(- test_df['emolex_score'].min(), test_df['emolex_score'].max()))
 
 # save results
 test_df.to_pickle(_root_path + 'output/data/test_sentiment_analyser.pkl')
@@ -134,3 +138,36 @@ sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels
 plt.tick_params(bottom=False, left=False)
 plt.tight_layout()
 plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_s140.png')
+
+
+# get class prediction
+def pred_class(score):
+    # following the advise from NLTK for Sentiment Analyisis, values betweet -0.05 and 0.05 are classified as neutral
+    if score > 0.05:
+        return 1
+    elif score < -0.05:
+        return -1
+    return 0
+
+
+test_df['bert_pred'] = test_df['bert_score'].apply(pred_class)
+test_df['google_pred'] = test_df['google_score'].apply(pred_class)
+test_df['vader_pred'] = test_df['vader_score'].apply(pred_class)
+test_df['emolex_pred'] = test_df['emolex_score'].apply(pred_class)
+test_df['testblob_pattern_pred'] = test_df['testblob_pattern_score'].apply(pred_class)
+test_df['testblob_nb_pred'] = test_df['testblob_nb_score'].apply(pred_class)
+
+# change label for negative tweets from 0 to -1
+test_df.label = test_df.label.apply(lambda x: -1 if x == 0 else 1)
+
+classifier = ['bert', 'google', 'vader', 'emolex', 'testblob_pattern', 'testblob_nb']
+metrics = pd.DataFrame(index=classifier, columns=['MSE', 'Accurancy', 'F1-Score'])
+
+for c in classifier:
+    metrics.at[c, 'MSE'] = mean_squared_error(test_df.label, test_df[c + '_score'])
+    metrics.at[c, 'Accurancy'] = accuracy_score(test_df.label, test_df[c + '_pred'], normalize=True)
+    metrics.at[c, 'F1-Score'] = f1_score(test_df.label, test_df[c + '_pred'], labels=[-1, 1], average='micro')
+
+metrics = metrics.astype(float).round(4)
+
+metrics.to_excel(_root_path + 'output/data/test_sentiment_analyser_metrics.xlsx')
