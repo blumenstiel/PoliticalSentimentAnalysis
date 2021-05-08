@@ -89,7 +89,7 @@ for i, row in test_df.iterrows():
 print('Finished Google API')
 
 # BERT
-bert_path = _root_path + '/models/bert/model_89440'
+bert_path = _root_path + '/models/bert/model_44720'
 
 if not os.path.isdir(bert_path):
     train_df = label_text.drop(test_df.index)
@@ -119,9 +119,6 @@ test_df['emolex_score'] = test_df['emolex'].apply(lambda x: x['positive'] - x['n
 # normalize emolex_score with length to match format [-1, 1]
 test_df['emolex_score'] = test_df['emolex_score'] / test_df.text.apply(lambda t: len(t.split(' ')))
 
-# set negative label to -1 to match format of scores
-test_df.label.apply(lambda x: -1 if x == 0 else 1)
-
 # save results
 test_df.to_pickle(_root_path + 'output/data/test_sentiment_analyser.pkl')
 test_df.to_excel(_root_path + 'output/data/test_sentiment_analyser.xlsx')
@@ -136,12 +133,4 @@ labels = ['Ground Truth', 'BERT Classifier', 'Google Cloud\nNL API', 'NLTK (VADE
 sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
 plt.tick_params(bottom=False, left=False)
 plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation.png')
-
-# plot agreement between 'vader_score' and 'google_score'
-# agreement = 1 - abs(test_df.vader_score - test_df.google_score)
-# sns.displot(agreement, binwidth=0.1, kde=True, color='gray')
-# plt.savefig('../output/figures/agreement_google_vader.png')
-
-# TODO: Agreement
-#  https://folk.ntnu.no/slyderse/medstat/Interrater_fullpage_9March2016.pdf
+plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_s140.png')

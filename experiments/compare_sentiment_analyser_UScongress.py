@@ -83,20 +83,12 @@ for i, row in test_df.iterrows():
 print('Finished Google API')
 
 # BERT
-bert_path = _root_path + '/models/bert/model_89440'
+bert_path = _root_path + '/models/bert/model_44720'
 
-if not os.path.isdir(bert_path):
-    train_inputs, validation_inputs, train_labels, validation_labels = train_test_split(train_df.text.values,
-                                                                                        train_df.label.values,
-                                                                                        random_state=42,
-                                                                                        test_size=0.95)
-    train_loader = BertDataset(train_inputs, train_labels).dataloader
-    val_loader = BertDataset(validation_inputs, validation_labels).dataloader
-    bert = BertClassifier()
-    bert.do_train(1, train_loader, val_loader, save_path=_root_path + 'models/bert/')
-else:
-  print('Load Bert Classifier from:', bert_path)
-  bert = BertClassifier(bert_path)
+assert os.path.isdir(bert_path), f'Please train Bert Classifier (given dir: {bert_path})'
+
+print('Load Bert Classifier from:', bert_path)
+bert = BertClassifier(bert_path)
 
 test_df['bert'] = bert.predict(test_df.text.values)
 
@@ -112,24 +104,21 @@ test_df['emolex_score'] = test_df['emolex'].apply(lambda x: x['positive'] - x['n
 # normalize emolex_score with length to match format [-1, 1]
 test_df['emolex_score'] = test_df['emolex_score'] / test_df.text.apply(lambda t: len(t.split(' ')))
 
-# set negative label to -1 to match format of scores
-test_df.label.apply(lambda x: -1 if x == 0 else 1)
-
 # save results
 test_df.to_pickle(_root_path + 'output/data/test_sentiment_analyser.pkl')
 test_df.to_excel(_root_path + 'output/data/test_sentiment_analyser.xlsx')
 
 # create correlation matrix
-scores = ['label', 'bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_pattern_score', 'testblob_nb_score']
+scores = ['bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_pattern_score', 'testblob_nb_score']
 corr_matrix = test_df[scores].corr()
 
 # plot matrix
-labels = ['Ground Truth', 'BERT Classifier', 'Google Cloud\nNL API', 'NLTK (VADER)', 'EmoLex',
+labels = ['BERT Classifier', 'Google Cloud\nNL API', 'NLTK (VADER)', 'EmoLex',
           'TextBlob\nPattern based', 'TextBlob\nNaive Bayes']
 sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
 plt.tick_params(bottom=False, left=False)
 plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation.png')
+plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_UScongress.png')
 
 # plot agreement between 'vader_score' and 'google_score'
 # agreement = 1 - abs(test_df.vader_score - test_df.google_score)
