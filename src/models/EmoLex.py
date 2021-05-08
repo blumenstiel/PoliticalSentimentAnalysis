@@ -1,4 +1,3 @@
-
 from nltk import SnowballStemmer, word_tokenize, TweetTokenizer, casual_tokenize
 import pandas as pd
 from tqdm import tqdm
@@ -12,6 +11,7 @@ emotion_intensity_lexicon_path = 'data/NRC-Suite-of-Sentiment-Emotion-Lexicons/N
 
 emotion_lexicon_path = 'data/NRC-Suite-of-Sentiment-Emotion-Lexicons/NRC-Sentiment-Emotion-Lexicons/' \
                        'NRC-Emotion-Lexicon-v0.92/NRC-Emotion-Lexicon-Wordlevel-v0.92.txt'
+
 
 def text_emotion(df, column, path_to_root='', lexicon='emotion_lexicon'):
     '''
@@ -53,17 +53,19 @@ def text_emotion(df, column, path_to_root='', lexicon='emotion_lexicon'):
     # create tweet-emotion-matrix
     emo_df = pd.DataFrame(0., index=df.index, columns=emotions)
 
+    # copy column to prevent changes on original text
+    df_column = df[column].copy()
+
     # tokenize tweets if str is provided
     if type(df[column].iloc[0]) == str:
         tokenizer = TweetTokenizer()
-        df[column] = df[column].apply(str.lower)
-        df[column] = df[column].apply(tokenizer.tokenize)
+        df_column = df_column.apply(str.lower)
+        df_column = df_column.apply(tokenizer.tokenize)
 
     stemmer = SnowballStemmer("english")
     emolex_words['stem'] = emolex_words.word.apply(stemmer.stem)
 
-    for i, row in df.iterrows():
-        text = df.loc[i][column]
+    for i, text in df_column.items():
         for word in text:
             stem = stemmer.stem(word)
 
