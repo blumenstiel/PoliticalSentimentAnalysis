@@ -40,7 +40,7 @@ def sample_dataset(df, column, num_samples):
     # get samples for each label in column of df
     for label in df[column].unique():
         label_df = df[df[column] == label]
-        label_df = label_df.loc[random.sample(set(label_df.index), min(int(num_samples / num_labels), len(label_df)))]
+        label_df = label_df.loc[random.sample(list(label_df.index), min(int(num_samples / num_labels), len(label_df)))]
         samples = pd.concat([samples, label_df])
 
     return samples
