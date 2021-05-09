@@ -72,6 +72,15 @@ class BertClassifier(object):
         self.tokenizer = BertTokenizer.from_pretrained(model, do_lower_case=True)
         self.max_len = max_len
 
+        # select device (CPU or GPU)
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+            print('Using GPU:', torch.cuda.get_device_name(0))
+        else:
+            print('No GPU available, using the CPU instead.')
+            self.device = torch.device("cpu")
+        self.model.to(self.device)
+
     def summary(self):
         # Get all of the model's parameters as a list of tuples.
         params = list(self.model.named_parameters())
@@ -95,15 +104,6 @@ class BertClassifier(object):
             self.optimizer = optimizer
         else:
             self.optimizer = AdamW(self.model.parameters(), lr=2e-5, eps=1e-8)
-
-        # select device (CPU or GPU)
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda")
-            print('Using GPU:', torch.cuda.get_device_name(0))
-        else:
-            print('No GPU available, using the CPU instead.')
-            self.device = torch.device("cpu")
-        self.model.to(self.device)
 
         total_steps = len(train_dataloader) * epochs
         global_step = 0
@@ -251,10 +251,23 @@ class BertClassifier(object):
         inputs = torch.tensor(inputs)
         masks = torch.tensor(masks)
 
-        output = self.model(inputs,
-                            attention_mask=masks)
+        batch_size = 50
+        dataset = TensorDataset(inputs, masks)
+        dataloader = DataLoader(dataset, batch_size=batch_size)
 
-        output = torch.nn.Softmax()(output[0]).detach().numpy()
+        self.model.eval()
+        torch.cuda.empty_cache()
+
+        output = []
+        with torch.no_grad():
+            for batch in dataloader:
+                batch = tuple(t.to(self.device) for t in batch)
+
+                batch_output = self.model(batch[0],
+                                          attention_mask=batch[1])
+
+                output.extend(
+                    torch.nn.Softmax()(batch_output[0]).cpu().detach().numpy())
 
         output = [dict(zip(['neg', 'pos'], p)) for p in output]
 
