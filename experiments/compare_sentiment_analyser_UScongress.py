@@ -12,6 +12,7 @@ from textblob import TextBlob
 from textblob.sentiments import NaiveBayesAnalyzer
 from src.models.EmoLex import text_emotion
 from google.cloud import language_v1
+from google.api_core.exceptions import InvalidArgument
 from src.models.BertClassifier import BertClassifier, BertDataset
 from sklearn.model_selection import train_test_split
 
@@ -64,13 +65,22 @@ client = language_v1.LanguageServiceClient()
 
 def google_sentiment_analysis(text):
     # Get sentiment scores for text by calling the Google Cloud Natural Language API
-    document = language_v1.Document(content=text, type_=language_v1.Document.Type.PLAIN_TEXT)
-    annotations = client.analyze_sentiment(request={'document': document})
-    result = dict(
-        sentiment=annotations.document_sentiment.score,
-        magnitude=annotations.document_sentiment.magnitude
-    )
+    try:
+        # Catch InvalidArgument, e.g. non-english texts
+        document = language_v1.Document(content=text, type_=language_v1.Document.Type.PLAIN_TEXT)
+        annotations = client.analyze_sentiment(request={'document': document})
+        result = dict(
+            sentiment=annotations.document_sentiment.score,
+            magnitude=annotations.document_sentiment.magnitude
+        )
+    except InvalidArgument:
+        result = dict(
+            sentiment=0,
+            magnitude=0
+        )
+
     return result
+
 
 
 # iterate over test df and sleep all 600 request because of Google API rate limits
