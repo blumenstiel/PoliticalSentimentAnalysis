@@ -181,7 +181,7 @@ metrics = metrics.astype(float).round(4)
 
 metrics.index = labels[1:]
 
-metrics.to_excel(_root_path + 'output/data/test_sentiment_analyser_metrics.xlsx')
+metrics.to_excel(_root_path + 'output/data/sentiment_analyser_metrics_s140.xlsx')
 
 
 # agreement between classifiers

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import nltk
 import time
+import pickle5 as pickle
 
 from nltk.sentiment import SentimentIntensityAnalyzer
 from textblob import TextBlob
@@ -22,7 +23,8 @@ from agreement.utils.kernels import linear_kernel
 _root_path = '/content/drive/MyDrive/PoliticalSentimentAnalysis/'
 
 # read tweets
-tweets_df = pd.read_pickle(_root_path + 'data/tweets_processed.pkl')
+with open(_root_path + 'data/tweets_processed.pkl', 'rb') as f:
+    tweets_df = pickle.load(f)
 
 # filter short tweets (not practical for comparing sentiment analyser)
 tweets_df = tweets_df[tweets_df.length > 10]
