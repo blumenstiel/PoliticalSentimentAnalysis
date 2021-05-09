@@ -1,78 +1,59 @@
 
-from nltk.sentiment import SentimentIntensityAnalyzer
 import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
-from google.cloud import language_v1
-from src.models.EmoLex import text_emotion
+import pickle5 as pickle
+from src.models.BertClassifier import BertClassifier
+from nltk.sentiment import SentimentIntensityAnalyzer
 
 
-# Google Cloud Natural Language API
-# IMPORTANT: To use the google cloud API, change the path to personal Google Could credentials
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = \
-    "/Users/benediktblumenstiel/Pycharm/PoliticalSentimentAnalysis/src/google_api_credentials.json"
-
-
-def google_sentiment_analysis(text, client):
-    """Get sentiment scores for text by calling the Google Cloud Natural Language API"""
-    document = language_v1.Document(content=text, type_=language_v1.Document.Type.PLAIN_TEXT)
-    annotations = client.analyze_sentiment(request={'document': document})
-    result = dict(
-        sentiment=annotations.document_sentiment.score,
-        magnitude=annotations.document_sentiment.magnitude
-    )
-    return result
-
-
-def label_tweets(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Sentiment Analysis of Tweets using Google Cloud Natural Language API and VADER (NLTK)
-    :param df: tweets_df
-    :return: labeled tweets as DataFrame
-    """
-    # Sentiment Analysis with Google Cloud Natural Language API
-    """
-    client = language_v1.LanguageServiceClient()
-    df['google'] = df.text.apply(lambda t: google_sentiment_analysis(t, client))
-    df['sentiment'] = df['google'].apply(lambda x: x['sentiment'])
-    df['magnitude'] = df['google'].apply(lambda x: x['magnitude'])
-    """
-
-    # Sentiment Analysis with VADER
-    sia = SentimentIntensityAnalyzer()
-    df['vader'] = df.text.apply(lambda t: sia.polarity_scores(t))
-    df['vader_score'] = df['vader'].apply(lambda x: x['compound'])
-
-    # Add EmoLex emotions
-    # df['emotions'] = text_emotion(df, 'text', path_to_root='../').to_dict('records')
-
-    return df
+# get class prediction
+def pred_class(score):
+    # following the advise from NLTK for Sentiment Analyisis, values betweet -0.05 and 0.05 are classified as neutral
+    if score > 0.05:
+        return 1
+    elif score < -0.05:
+        return -1
+    return 0
 
 
 if __name__ == '__main__':
-    # load data
-    tweets_df = pd.read_pickle('../../data/tweets_raw.pkl')
+    _root_path = '/content/drive/MyDrive/PoliticalSentimentAnalysis/'
 
-    """
-    # sort values after length (potential more information, limited google resources
-    tweets_df['length'] = tweets_df.text.apply(lambda x: len(x))
-    tweets_df.sort_values('length', ascending=False, inplace=True)
-    """
+    # load data
+    with open(_root_path + 'data/tweets_emotions.pkl', 'rb') as f:
+        tweets_df = pickle.load(f)
 
     # split up tweets for showing process and saving interim results
     tweets_df_split = np.array_split(tweets_df, 1000)
     tweets_df_labeled = pd.DataFrame()
+
+    # Load trained BERT Model
+    bert_path = _root_path + '/models/bert/model_28620'
+    assert os.path.isdir(bert_path), f'Please train Bert Classifier (given dir: {bert_path})'
+    print('Load Bert Classifier from:', bert_path)
+    bert = BertClassifier(bert_path)
+
+    # Init VADER
+    sia = SentimentIntensityAnalyzer()
 
     # labeling
     with tqdm(total=len(tweets_df_split)) as pbar:
         for df in tweets_df_split:
             pbar.update(1)
 
-            # sentiment analysis
-            df = label_tweets(df)
-            tweets_df_labeled = tweets_df_labeled.append(df)
-            df = None  # free memory
+            # BERT sentiment analysis
+            df['bert'] = bert.predict(df.text.values)
+            df['sentiment'] = df['bert'].apply(lambda x: x['pos'] - x['neg'])
+            df['label'] = df['sentiment'].apply(pred_class)
 
-            tweets_df_labeled.to_pickle('../../data/tweets_labeled.pkl')
-            tweets_df_labeled.to_csv('../../data/tweets_labeled.csv')
+            # VADER sentiment analysis
+            df['vader'] = df.text.apply(sia.polarity_scores)
+            df['vader_score'] = df['vader'].apply(lambda x: x['compound'])
+            df['vader_label'] = df['vader_score'].apply(pred_class)
+
+            tweets_df_labeled = tweets_df_labeled.append(df)
+
+            tweets_df_labeled.to_pickle(_root_path + 'data/tweets_labeled.pkl')
+            tweets_df_labeled.to_csv(_root_path + 'data/tweets_labeled.csv')
