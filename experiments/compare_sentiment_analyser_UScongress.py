@@ -140,6 +140,10 @@ test_df.to_excel(_root_path + 'output/data/sentiment_analyser_UScongress.xlsx')
 scores = ['bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_score']
 corr_matrix = test_df[scores].corr()
 
+# set default matplotlib param
+plt.rcParams["figure.figsize"] = (8, 5)
+plt.rc('font', size=12)
+
 # plot matrix
 labels = ['BERT Classifier', 'Google NL API', 'NLTK (VADER)', 'EmoLex', 'TextBlob']
 sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
@@ -163,6 +167,7 @@ kappa = pd.DataFrame(index=preds, columns=preds)
 for n in preds:
   for m in preds:
     kappa.at[n, m] = get_kappa(n, m)
+kappa = kappa.astype(float)
 
 sns.heatmap(kappa, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
 plt.tick_params(bottom=False, left=False)

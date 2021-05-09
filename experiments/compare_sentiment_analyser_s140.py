@@ -131,18 +131,6 @@ test_df['emolex_score'] = test_df['emolex_score'] / test_df.text.apply(lambda t:
 # resize range to [-1, 1]
 test_df['emolex_score'] = test_df['emolex_score'] / (max(- test_df['emolex_score'].min(), test_df['emolex_score'].max()))
 
-# create correlation matrix
-scores = ['label', 'bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_score']
-corr_matrix = test_df[scores].corr()
-
-# plot matrix
-labels = ['Ground Truth', 'BERT Classifier', 'Google NL API', 'NLTK (VADER)', 'EmoLex', 'TextBlob']
-sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
-plt.tick_params(bottom=False, left=False)
-plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_s140.png')
-
-
 # get class prediction
 def pred_class(score):
     # following the advise from NLTK for Sentiment Analyisis, values betweet -0.05 and 0.05 are classified as neutral
@@ -159,12 +147,27 @@ test_df['vader_pred'] = test_df['vader_score'].apply(pred_class)
 test_df['emolex_pred'] = test_df['emolex_score'].apply(pred_class)
 test_df['testblob_pred'] = test_df['testblob_score'].apply(pred_class)
 
-# change label for negative tweets from 0 to -1
+# change label for negative tweets from 0 to -1 to match pred scores
 test_df.label = test_df.label.apply(lambda x: -1 if x == 0 else 1)
 
 # save results
 test_df.to_pickle(_root_path + 'output/data/sentiment_analyser_s140.pkl')
 test_df.to_excel(_root_path + 'output/data/sentiment_analyser_s140.xlsx')
+
+# create correlation matrix
+scores = ['label', 'bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_score']
+corr_matrix = test_df[scores].corr()
+
+# set default matplotlib param
+plt.rcParams["figure.figsize"] = (8, 5)
+plt.rc('font', size=12)
+
+# plot matrix
+labels = ['Ground Truth', 'BERT Classifier', 'Google NL API', 'NLTK (VADER)', 'EmoLex', 'TextBlob']
+sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
+plt.tick_params(bottom=False, left=False)
+plt.tight_layout()
+plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_s140.png')
 
 classifier = ['bert', 'google', 'vader', 'emolex', 'testblob']
 metrics = pd.DataFrame(index=classifier, columns=['MSE', 'Accurancy', 'F1-Score'])
@@ -190,12 +193,12 @@ def get_kappa(n, m):
   return cohens_kappa(questions_answers_table, users_answers_table, weights_kernel=linear_kernel)
 
 
-preds = ['bert_pred', 'google_pred', 'vader_pred', 'emolex_pred', 'testblob_pred']
-
+preds = ['label', 'bert_pred', 'google_pred', 'vader_pred', 'emolex_pred', 'testblob_pred']
 kappa = pd.DataFrame(index=preds, columns=preds)
 for n in preds:
   for m in preds:
     kappa.at[n, m] = get_kappa(n, m)
+kappa = kappa.astype(float)
 
 sns.heatmap(kappa, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
 plt.tick_params(bottom=False, left=False)
