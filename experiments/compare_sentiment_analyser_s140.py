@@ -50,7 +50,7 @@ test_df['vader'] = test_df.text.apply(sia.polarity_scores)
 
 print('Finished VADER')
 
-# TextBlob Pattern based and pretrained Naive Bayes
+# TextBlob Pattern based
 os.system('python -m textblob.download_corpora')
 test_df['testblob'] = test_df.text.apply(lambda t: TextBlob(t).sentiment)
 # convert TextBlob Class to dict
@@ -153,54 +153,3 @@ test_df.label = test_df.label.apply(lambda x: -1 if x == 0 else 1)
 # save results
 test_df.to_pickle(_root_path + 'output/data/sentiment_analyser_s140.pkl')
 test_df.to_excel(_root_path + 'output/data/sentiment_analyser_s140.xlsx')
-
-# create correlation matrix
-scores = ['label', 'bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_score']
-corr_matrix = test_df[scores].corr()
-
-# set default matplotlib param
-plt.rcParams["figure.figsize"] = (8, 5)
-plt.rc('font', size=12)
-
-# plot matrix
-labels = ['Ground Truth', 'BERT Classifier', 'Google NL API', 'NLTK (VADER)', 'EmoLex', 'TextBlob']
-sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
-plt.tick_params(bottom=False, left=False)
-plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_s140.png')
-
-classifier = ['bert', 'google', 'vader', 'emolex', 'testblob']
-metrics = pd.DataFrame(index=classifier, columns=['MSE', 'Accurancy', 'F1-Score'])
-
-for c in classifier:
-    metrics.at[c, 'MSE'] = mean_squared_error(test_df.label, test_df[c + '_score'])
-    metrics.at[c, 'Accurancy'] = accuracy_score(test_df.label, test_df[c + '_pred'], normalize=True)
-    metrics.at[c, 'F1-Score'] = f1_score(test_df.label, test_df[c + '_pred'], labels=[-1, 1], average='micro')
-
-metrics = metrics.astype(float).round(4)
-
-metrics.index = labels[1:]
-
-metrics.to_excel(_root_path + 'output/data/sentiment_analyser_metrics_s140.xlsx')
-
-
-# agreement between classifiers
-def get_kappa(n, m):
-  dataset = test_df[[n, m]].stack().reset_index().values
-  questions_answers_table = pivot_table_frequency(dataset[:, 0], dataset[:, 2])
-  users_answers_table = pivot_table_frequency(dataset[:, 1], dataset[:, 2])
-  # return krippendorffs_alpha(questions_answers_table)
-  return cohens_kappa(questions_answers_table, users_answers_table, weights_kernel=linear_kernel)
-
-
-preds = ['label', 'bert_pred', 'google_pred', 'vader_pred', 'emolex_pred', 'testblob_pred']
-kappa = pd.DataFrame(index=preds, columns=preds)
-for n in preds:
-  for m in preds:
-    kappa.at[n, m] = get_kappa(n, m)
-kappa = kappa.astype(float)
-
-sns.heatmap(kappa, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
-plt.tick_params(bottom=False, left=False)
-plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_kappa_s140.png')

@@ -12,7 +12,7 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from textblob import TextBlob
 from src.models.EmoLex import text_emotion
 from google.cloud import language_v1
-from google.api_core.exceptions import InvalidArgument
+from google.api_core.exceptions import InvalidArgument, ResourceExhausted
 from src.models.BertClassifier import BertClassifier, BertDataset
 from sklearn.model_selection import train_test_split
 
@@ -45,7 +45,7 @@ test_df['vader'] = test_df.text.apply(sia.polarity_scores)
 
 print('Finished VADER')
 
-# TextBlob Pattern based and pretrained Naive Bayes
+# TextBlob Pattern based
 os.system('python -m textblob.download_corpora')
 test_df['testblob'] = test_df.text.apply(lambda t: TextBlob(t).sentiment)
 # convert TextBlob Class to dict
@@ -84,14 +84,16 @@ def google_sentiment_analysis(text):
     return result
 
 
-
 # iterate over test df and sleep all 600 request because of Google API rate limits
 test_df['google'] = None
 for i, row in test_df.iterrows():
-    test_df.at[i, 'google'] = google_sentiment_analysis(row.text)
-
-    if i != 0 and i % 500 == 0:
-      time.sleep(60)
+    while True:
+        try:
+            test_df.at[i, 'google'] = google_sentiment_analysis(row.text)
+            break
+        except ResourceExhausted:
+            # Sleep for 20 sec when request limit is reached
+            time.sleep(20)
 
 print('Finished Google API')
 
@@ -137,41 +139,3 @@ test_df['testblob_pred'] = test_df['testblob_score'].apply(pred_class)
 # save results
 test_df.to_pickle(_root_path + 'output/data/sentiment_analyser_UScongress.pkl')
 test_df.to_excel(_root_path + 'output/data/sentiment_analyser_UScongress.xlsx')
-
-# create correlation matrix
-scores = ['bert_score', 'google_score', 'vader_score', 'emolex_score', 'testblob_score']
-corr_matrix = test_df[scores].corr()
-
-# set default matplotlib param
-plt.rcParams["figure.figsize"] = (8, 5)
-plt.rc('font', size=12)
-
-# plot matrix
-labels = ['BERT Classifier', 'Google NL API', 'NLTK (VADER)', 'EmoLex', 'TextBlob']
-sns.heatmap(corr_matrix, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
-plt.tick_params(bottom=False, left=False)
-plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_correlation_UScongress.png')
-
-
-# agreement between classifiers
-def get_kappa(n, m):
-  dataset = test_df[[n, m]].stack().reset_index().values
-  questions_answers_table = pivot_table_frequency(dataset[:, 0], dataset[:, 2])
-  users_answers_table = pivot_table_frequency(dataset[:, 1], dataset[:, 2])
-  # return krippendorffs_alpha(questions_answers_table)
-  return cohens_kappa(questions_answers_table, users_answers_table, weights_kernel=linear_kernel)
-
-
-preds = ['bert_pred', 'google_pred', 'vader_pred', 'emolex_pred', 'testblob_pred']
-
-kappa = pd.DataFrame(index=preds, columns=preds)
-for n in preds:
-  for m in preds:
-    kappa.at[n, m] = get_kappa(n, m)
-kappa = kappa.astype(float)
-
-sns.heatmap(kappa, annot=True, cmap='gray', vmin=-1., vmax=1., xticklabels=labels, yticklabels=labels, fmt='.2f')
-plt.tick_params(bottom=False, left=False)
-plt.tight_layout()
-plt.savefig(_root_path + 'output/figures/sentiment_analyser_kappa_UScongress.png')
