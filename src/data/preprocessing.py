@@ -13,7 +13,7 @@ from nltk.stem import WordNetLemmatizer
 
 
 def preprocess_tweets(df: pd.DataFrame, column: str,
-                      extract_information: bool = False,
+                      extract_information: bool = True,
                       remove_stopwords: bool = True,
                       remove_short_words: bool = True,
                       ) -> pd.DataFrame:
@@ -24,8 +24,8 @@ def preprocess_tweets(df: pd.DataFrame, column: str,
     """
 
     # regex for hastags, mentions and urls
-    hashtags = re.compile(r"^#\S+|\s#\S+")
-    mentions = re.compile(r"^@\S+|\s@\S+")
+    hashtags = re.compile(r"^#[A-Za-z0-9]+|\s#[A-Za-z0-9]+")
+    mentions = re.compile(r"^@[A-Za-z0-9]+|\s@[A-Za-z0-9]+")
     urls = re.compile(r"https?://\S+")
     whitespaces = re.compile(r"\s\s+")
     non_characters = re.compile(r"[^A-Za-z\s]+")
@@ -53,10 +53,10 @@ def preprocess_tweets(df: pd.DataFrame, column: str,
 
         return text
 
-    df[column] = df[column].apply(preprocess)
+    df['tokens'] = df[column].apply(preprocess)
 
     # tokenize
-    df['tokens'] = df.text.apply(word_tokenize)
+    df.tokens = df.tokens.apply(word_tokenize)
 
     if remove_stopwords:
         def filter_stopwords(word):
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
     # filter english tweets
     if 'language' in tweets_df.columns:
-        df = tweets_df[tweets_df.language == 'en']
+        tweets_df = tweets_df[tweets_df.language == 'en']
 
     # split up tweets for showing process and saving interim results
     tweets_df_split = np.array_split(tweets_df, 100)

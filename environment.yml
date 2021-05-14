@@ -21,5 +21,10 @@ dependencies:
   - openpyxl
   - textblob
   - google-cloud-language
+  - plotly
+  - plotly-orca
+  - statsmodels
   - pip:
     - -e .
+    - psutil
+    - agreement

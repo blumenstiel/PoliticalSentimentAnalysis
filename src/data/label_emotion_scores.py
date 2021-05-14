@@ -25,3 +25,29 @@ if __name__ == '__main__':
 
             emotion_df.to_pickle(_root_path + 'data/tweets_emotions.pkl')
             emotion_df.to_csv(_root_path + 'data/tweets_emotions.csv')
+
+    # get relative values for emotions
+    emotions = ['anger', 'anticipation', 'disgust', 'fear', 'joy', 'sadness', 'surprise', 'trust', 'neutral']
+    # 'positive' and 'negative' are not considered as they result from combined positive and negative emotions
+
+    sum = emotion_df[emotions].sum(axis=1)
+    for e in emotions:
+        emotion_df[e] = emotion_df[e] / sum
+
+    # rename emotions for cleaner plots
+    tweets_df.rename(columns={
+        'anger': 'Anger',
+        'anticipation': 'Anticipation',
+        'joy': 'Joy',
+        'trust': 'Trust',
+        'fear': 'Fear',
+        'surprise': 'Surprise',
+        'sadness': 'Sadness',
+        'disgust': 'Disgust',
+        'neutral': 'Neutral',
+        'negative': 'Negative',
+        'positive': 'Positive'
+    }, inplace=True)
+
+    emotion_df.to_pickle(_root_path + 'data/tweets_emotions.pkl')
+    emotion_df.to_csv(_root_path + 'data/tweets_emotions.csv')

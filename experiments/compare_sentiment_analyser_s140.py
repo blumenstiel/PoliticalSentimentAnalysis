@@ -31,7 +31,7 @@ s140 = pd.read_csv(_root_path + 'data/sentiment140/training.1600000.processed.no
 label_text = s140[[0, 5]]
 
 # Convert labels to range -1 to 1
-label_text[0] = label_text[0].apply(lambda x: 0 if x == 0 else 1)
+label_text[0] = label_text[0].apply(lambda x: -1 if x == 0 else 1)
 
 # Assign proper column names to labels
 label_text.columns = ['label', 'text']
@@ -104,6 +104,7 @@ bert_path = _root_path + '/models/bert/model_28620'
 
 if not os.path.isdir(bert_path):
     train_df = label_text.drop(test_df.index)
+    train_df.label = train_df.label.apply(lambda x: 0 if x == -1 else 1)
     train_inputs, validation_inputs, train_labels, validation_labels = train_test_split(train_df.text.values,
                                                                                         train_df.label.values,
                                                                                         random_state=42,
@@ -146,9 +147,6 @@ test_df['google_pred'] = test_df['google_score'].apply(pred_class)
 test_df['vader_pred'] = test_df['vader_score'].apply(pred_class)
 test_df['emolex_pred'] = test_df['emolex_score'].apply(pred_class)
 test_df['testblob_pred'] = test_df['testblob_score'].apply(pred_class)
-
-# change label for negative tweets from 0 to -1 to match pred scores
-test_df.label = test_df.label.apply(lambda x: -1 if x == 0 else 1)
 
 # save results
 test_df.to_pickle(_root_path + 'output/data/sentiment_analyser_s140.pkl')

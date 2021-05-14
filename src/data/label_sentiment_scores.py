@@ -4,6 +4,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 import pickle5 as pickle
+import nltk
 from src.models.BertClassifier import BertClassifier
 from nltk.sentiment import SentimentIntensityAnalyzer
 
@@ -36,6 +37,7 @@ if __name__ == '__main__':
     bert = BertClassifier(bert_path)
 
     # Init VADER
+    nltk.download('vader_lexicon')
     sia = SentimentIntensityAnalyzer()
 
     # labeling
@@ -45,13 +47,13 @@ if __name__ == '__main__':
 
             # BERT sentiment analysis
             df['bert'] = bert.predict(df.text.values)
-            df['sentiment'] = df['bert'].apply(lambda x: x['pos'] - x['neg'])
-            df['label'] = df['sentiment'].apply(pred_class)
+            df['Polarity'] = df['bert'].apply(lambda x: x['pos'] - x['neg'])
+            df['Label'] = df['polarity'].apply(pred_class)
 
             # VADER sentiment analysis
             df['vader'] = df.text.apply(sia.polarity_scores)
-            df['vader_score'] = df['vader'].apply(lambda x: x['compound'])
-            df['vader_label'] = df['vader_score'].apply(pred_class)
+            df['vader_polarity'] = df['vader'].apply(lambda x: x['compound'])
+            df['vader_label'] = df['vader_polarity'].apply(pred_class)
 
             tweets_df_labeled = tweets_df_labeled.append(df)
 

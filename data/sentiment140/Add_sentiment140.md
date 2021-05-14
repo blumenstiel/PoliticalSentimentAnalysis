@@ -1,3 +1,3 @@
 # Adding Lexicon
 
-Download sentiment140 dataset from https://www.kaggle.com/kazanova/sentiment140 
+Download sentiment140 dataset from http://cs.stanford.edu/people/alecmgo/trainingandtestdata.zip 
