@@ -2,6 +2,8 @@
 # code based on:
 # https://www.kaggle.com/menion/sentiment-analysis-with-bert-87-accuracy
 # https://www.kaggle.com/sreejiths0/efficient-tweet-preprocessing
+# background: examples of jusing re for preprocessing (e.g. for hashtags, mentions etc.)
+# foregroud: testing different processing steps, add other known preprocessing steps (stopwords, lemmatizaton)
 
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
