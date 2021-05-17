@@ -3,6 +3,9 @@
 # https://iq.opengenus.org/binary-text-classification-bert/
 # https://colab.research.google.com/drive/1Wd8pQDaSwLgyHsHF9UjN7-fP93cfPOFI?usp=sharing
 
+# background: examples of interface of transforers model
+# forground: buliding a class for this specific use case
+
 import os
 import shutil
 import numpy as np
