@@ -3,9 +3,11 @@ import pandas as pd
 from tqdm import tqdm
 
 # From Lab 5 - code snippet
-# Lexicon from https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm
+# background: generell method structure
+# foreground: tested different processing steps, tested different lexicons, adjusted method with stem comparision and neutral words
 
-# Stolen code from a tutorial on sentiment analysis of Harry potter
+# Lexicon from https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm
+# class can handle different lexicons. "emotion_lexicon" is recommended and default because of lexicon size.
 emotion_intensity_lexicon_path = 'data/NRC-Suite-of-Sentiment-Emotion-Lexicons/NRC-Sentiment-Emotion-Lexicons/' \
                                  'NRC-Emotion-Intensity-Lexicon-v1/NRC-Emotion-Intensity-Lexicon-v1.txt'
 
